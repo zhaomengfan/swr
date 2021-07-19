@@ -1,6 +1,4 @@
 import { useEffect } from 'react'
-
-// @ts-expect-error
 import useSWR from 'swr'
 import { withMiddleware } from '../src/utils/with-middleware'
 import { Key, SWRHook, Middleware, SWRConfiguration } from '../src/types'
@@ -38,7 +36,9 @@ export const subscribe = (<Data, Error>(useSWRNext: SWRHook) => (
         await mutate(() => {
           throw err
         }, false)
-      } catch (_) {}
+      } catch (_) {
+        /* eslint-disable-line no-empty */
+      }
     }
 
     if (subscriptions.get(key) === 1) {
