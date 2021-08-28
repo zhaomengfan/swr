@@ -1,5 +1,5 @@
-import { ProviderOptions } from '../types'
-import { isUndefined } from './helper'
+import { ConfigOptions } from '../types'
+import { isUndefined, noop } from './helper'
 
 /**
  * Due to bug https://bugs.chromium.org/p/chromium/issues/detail?id=678075,
@@ -12,14 +12,13 @@ let online = true
 const isOnline = () => online
 const hasWindow = typeof window !== 'undefined'
 const hasDocument = typeof document !== 'undefined'
-const add = 'addEventListener'
-function noop() {}
 
 // For node and React Native, `add/removeEventListener` doesn't exist on window.
-const onWindowEvent = hasWindow && window[add] ? window[add] : noop
-const onDocumentEvent = hasDocument ? document[add] : noop
+const onWindowEvent =
+  hasWindow && window.addEventListener ? window.addEventListener : noop
+const onDocumentEvent = hasDocument ? document.addEventListener : noop
 
-const isDocumentVisible = () => {
+const isVisible = () => {
   const visibilityState = hasDocument && document.visibilityState
   if (!isUndefined(visibilityState)) {
     return visibilityState !== 'hidden'
@@ -27,13 +26,13 @@ const isDocumentVisible = () => {
   return true
 }
 
-const setupOnFocus = (cb: () => void) => {
+const initFocus = (cb: () => void) => {
   // focus revalidate
   onDocumentEvent('visibilitychange', cb)
   onWindowEvent('focus', cb)
 }
 
-const setupOnReconnect = (cb: () => void) => {
+const initReconnect = (cb: () => void) => {
   // reconnect revalidate
   onWindowEvent('online', () => {
     online = true
@@ -47,10 +46,10 @@ const setupOnReconnect = (cb: () => void) => {
 
 export const preset = {
   isOnline,
-  isDocumentVisible
+  isVisible
 } as const
 
-export const provider: ProviderOptions = {
-  setupOnFocus,
-  setupOnReconnect
+export const defaultConfigOptions: ConfigOptions = {
+  initFocus,
+  initReconnect
 }
