@@ -15,18 +15,58 @@ describe('useSWRInfinite', () => {
   it('should render the first page component', async () => {
     const key = createKey()
     function Page() {
-      const { data } = useSWRInfinite(
+      const { data, error, isValidating } = useSWRInfinite(
         index => `page-${index}-${key}`,
         infiniteKey => createResponse(infiniteKey)
       )
 
-      return <div>data:{data}</div>
+      return (
+        <div>
+          <div>data:{data}</div>
+          <div>error:{error}</div>
+          <div>isValidating:{isValidating.toString()}</div>
+        </div>
+      )
     }
 
     renderWithConfig(<Page />)
     screen.getByText('data:')
 
     await screen.findByText(`data:page-0-${key}`)
+    await screen.findByText(`error:`)
+    await screen.findByText(`isValidating:false`)
+  })
+
+  it('should not render anything if getKey throw error and call mutate wont cause error', async () => {
+    function Page() {
+      const { data, error, isValidating, mutate } = useSWRInfinite(
+        () => {
+          throw new Error('error')
+        },
+        infiniteKey => createResponse(infiniteKey)
+      )
+
+      return (
+        <div>
+          <div onClick={() => mutate()}>data:{data}</div>
+          <div>error:{error}</div>
+          <div>isValidating:{isValidating.toString()}</div>
+        </div>
+      )
+    }
+
+    renderWithConfig(<Page />)
+    screen.getByText('data:')
+
+    await screen.findByText(`data:`)
+    await screen.findByText(`error:`)
+    await screen.findByText(`isValidating:false`)
+
+    fireEvent.click(screen.getByText('data:'))
+
+    await screen.findByText(`data:`)
+    await screen.findByText(`error:`)
+    await screen.findByText(`isValidating:false`)
   })
 
   it('should render the multiple pages', async () => {
@@ -773,6 +813,39 @@ describe('useSWRInfinite', () => {
     expect(loggedValues).toEqual([1])
   })
 
+  it('setSize should only accept number', async () => {
+    const key = createKey()
+    function Comp() {
+      const { data, size, setSize } = useSWRInfinite(
+        index => [key, index],
+        (_, index) => createResponse(`page ${index}`)
+      )
+
+      return (
+        <>
+          <div
+            onClick={() => {
+              // load next page
+              // @ts-ignore
+              setSize('2')
+            }}
+          >
+            data:{data}
+          </div>
+          <div>size:{size}</div>
+        </>
+      )
+    }
+    renderWithConfig(<Comp></Comp>)
+    await screen.findByText('data:page 0')
+    await screen.findByText('size:1')
+
+    fireEvent.click(screen.getByText('data:page 0'))
+
+    await screen.findByText('data:page 0')
+    await screen.findByText('size:1')
+  })
+
   it('should correctly set size when setSize receives a callback', async () => {
     const key = createKey()
 
@@ -983,5 +1056,43 @@ describe('useSWRInfinite', () => {
     expect(fetcher).toBeCalledTimes(2)
 
     expect(logger).toEqual([undefined, ['foo-0'], ['foo-1']])
+  })
+
+  it('should pass the correct cursor information in `getKey`', async () => {
+    const key = createKey()
+    const fetcher = jest.fn(index => createResponse('data-' + index))
+    const logger = []
+    function Page() {
+      const { data } = useSWRInfinite(
+        (index, previousPageData) => {
+          logger.push(key + ':' + index + ':' + previousPageData)
+          return '' + index
+        },
+        fetcher,
+        {
+          dedupingInterval: 0,
+          initialSize: 5
+        }
+      )
+      return (
+        <>
+          <div>{data ? data.length : 0}</div>
+        </>
+      )
+    }
+
+    renderWithConfig(<Page />)
+    await screen.findByText('5')
+
+    expect(
+      logger.every(log => {
+        const [k, index, previousData] = log.split(':')
+        return (
+          k === key &&
+          ((index === '0' && previousData === 'null') ||
+            previousData === 'data-' + (index - 1))
+        )
+      })
+    ).toBeTruthy()
   })
 })
