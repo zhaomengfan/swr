@@ -19,7 +19,7 @@ describe('useSWR - config callbacks', () => {
       )
     }
     const { rerender } = renderWithConfig(<Page text={'a'} />)
-    // the onSuccess callback does not trigger yet, the state still null.
+    // the onSuccess callback does not trigger yet, the state is still null.
     screen.getByText('hello, , a')
     expect(state).toEqual(null)
 
@@ -57,7 +57,9 @@ describe('useSWR - config callbacks', () => {
         )
       return (
         <div onClick={() => mutate()}>
-          hello, {data}, {props.text}
+          <>
+            hello, {data}, {props.text}
+          </>
         </div>
       )
     }
@@ -70,7 +72,7 @@ describe('useSWR - config callbacks', () => {
 
     expect(state).toEqual('a')
 
-    // props changed, but the onError callback doese not trigger yet.
+    // props changed, but the onError callback does not trigger yet.
     rerender(<Page text="b" />)
     screen.getByText('Error: 0')
     screen.getByTitle('b')
@@ -100,7 +102,9 @@ describe('useSWR - config callbacks', () => {
       if (error) return <div title={props.text}>{error.message}</div>
       return (
         <div>
-          hello, {data}, {props.text}
+          <>
+            hello, {data}, {props.text}
+          </>
         </div>
       )
     }
@@ -113,9 +117,9 @@ describe('useSWR - config callbacks', () => {
     screen.getByTitle('a')
     expect(state).toEqual('a')
 
-    // since the onErrorRetry schedule a timer to trigger revalidation, update props.text now
+    // since the onErrorRetry schedule a timer to trigger revalidation, and update props.text now
     rerender(<Page text="b" />)
-    // not revalidate yet.
+    // not revalidated yet.
     screen.getByText('Error: 0')
     screen.getByTitle('b')
     expect(state).toEqual('a')

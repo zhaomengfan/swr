@@ -1,4 +1,10 @@
-import { SWRConfiguration, SWRResponse, Arguments, BareFetcher } from 'swr'
+import type {
+  SWRConfiguration,
+  SWRResponse,
+  Arguments,
+  BareFetcher,
+  State
+} from 'swr/_internal'
 
 type FetcherResponse<Data = unknown> = Data | Promise<Data>
 
@@ -6,20 +12,14 @@ export type SWRInfiniteFetcher<
   Data = any,
   KeyLoader extends SWRInfiniteKeyLoader = SWRInfiniteKeyLoader
 > = KeyLoader extends (...args: any[]) => any
-  ? ReturnType<KeyLoader> extends
-      | readonly [...infer K]
-      | null
-      | false
-      | undefined
-    ? (...args: [...K]) => FetcherResponse<Data>
-    : ReturnType<KeyLoader> extends infer T | null | false | undefined
-    ? (...args: [T]) => FetcherResponse<Data>
+  ? ReturnType<KeyLoader> extends infer T | null | false | undefined
+    ? (args: T) => FetcherResponse<Data>
     : never
   : never
 
-export type SWRInfiniteKeyLoader = (
+export type SWRInfiniteKeyLoader<Data = any> = (
   index: number,
-  previousPageData: any | null
+  previousPageData: Data | null
 ) => Arguments
 
 export interface SWRInfiniteConfiguration<
@@ -116,4 +116,15 @@ export interface SWRInfiniteHook {
     fetcher: BareFetcher<Data> | null,
     config: SWRInfiniteConfiguration<Data, Error, BareFetcher<Data>> | undefined
   ): SWRInfiniteResponse<Data, Error>
+}
+
+export interface SWRInfiniteCacheValue<Data = any, Error = any>
+  extends State<Data, Error> {
+  // We use cache to pass extra info (context) to fetcher so it can be globally
+  // shared. The key of the context data is based on the first-page key.
+  _i?: [boolean] | [boolean, Data[] | undefined]
+  // Page size is also cached to share the page data between hooks with the
+  // same key.
+  _l?: number
+  _k?: Arguments
 }

@@ -4,7 +4,7 @@
 
 Deploy your own SWR project with Vercel.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/project?template=https://github.com/vercel/swr/tree/main/examples/suspense)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?s=https://github.com/vercel/swr/tree/main/examples/suspense)
 
 ## How to Use
 
@@ -25,12 +25,6 @@ npm install
 npm run dev
 ```
 
-Deploy it to the cloud with [now](https://vercel.com/home) ([download](https://vercel.com/download))
-
-```
-now
-```
-
 ## The Idea behind the Example
 
-Show how to use SWR suspense option with React suspense.
+Show how to use the SWR suspense option with React suspense.

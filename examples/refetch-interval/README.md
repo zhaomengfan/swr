@@ -4,7 +4,7 @@
 
 Deploy your own SWR project with Vercel Now.
 
-[![Deploy with Vercel Now](https://vercel.com/button)](https://vercel.com/new/project?template=https://github.com/vercel/swr/tree/main/examples/refetch-interval)
+[![Deploy with Vercel Now](https://vercel.com/button)](https://vercel.com/new/clone?s=https://github.com/vercel/swr/tree/main/examples/refetch-interval)
 
 ## How to Use
 
@@ -25,12 +25,6 @@ npm install
 npm run dev
 ```
 
-Deploy it to the cloud with [now](https://vercel.com/home) ([download](https://vercel.com/download))
-
-```
-now
-```
-
 ## The Idea behind the Example
 
-Show how to make SWR fetch the API again in an interval automatically to ensure the data up-to-date.
+Show how to make SWR fetch the API again in an interval automatically to ensure the data is up-to-date.

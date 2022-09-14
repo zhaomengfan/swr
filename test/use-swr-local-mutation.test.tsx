@@ -1,14 +1,16 @@
 import { act, screen, fireEvent } from '@testing-library/react'
 import React, { useEffect, useState } from 'react'
 import useSWR, { mutate as globalMutate, useSWRConfig } from 'swr'
-import { serialize } from '../src/utils/serialize'
+import useSWRInfinite from 'swr/infinite'
+import { serialize } from '../_internal/utils/serialize'
 import {
   createResponse,
   sleep,
   nextTick,
   createKey,
   renderWithConfig,
-  renderWithGlobalCache
+  renderWithGlobalCache,
+  executeWithoutBatching
 } from './utils'
 
 describe('useSWR - local mutation', () => {
@@ -58,7 +60,7 @@ describe('useSWR - local mutation', () => {
             setJob('chef')
           }}
         >
-          {name}:{job}
+          {`${name}:${job}`}
         </span>
       )
     }
@@ -112,7 +114,7 @@ describe('useSWR - local mutation', () => {
     // hydration
     screen.getByText('data:')
 
-    //mount
+    // mount
     await screen.findByText('data: 0')
 
     act(() => {
@@ -143,7 +145,7 @@ describe('useSWR - local mutation', () => {
     // hydration
     screen.getByText('data:')
 
-    //mount
+    // mount
     await screen.findByText('data: 0')
     act(() => {
       // mutate and revalidate
@@ -167,7 +169,7 @@ describe('useSWR - local mutation', () => {
     // hydration
     screen.getByText('data:')
 
-    //mount
+    // mount
     await screen.findByText('data: truth')
 
     act(() => {
@@ -196,7 +198,7 @@ describe('useSWR - local mutation', () => {
     // hydration
     screen.getByText('data:')
 
-    //mount
+    // mount
     await screen.findByText('data: 0')
 
     await nextTick()
@@ -222,7 +224,7 @@ describe('useSWR - local mutation', () => {
     // hydration
     screen.getByText('data:')
 
-    //mount
+    // mount
     await screen.findByText('data: 0')
 
     await nextTick()
@@ -250,7 +252,7 @@ describe('useSWR - local mutation', () => {
     // hydration
     screen.getByText('data:')
 
-    //mount
+    // mount
     await screen.findByText('data: 0')
 
     act(() => {
@@ -272,7 +274,7 @@ describe('useSWR - local mutation', () => {
 
     // Prefill the cache with data
     renderWithConfig(<Page />, {
-      provider: () => new Map([[key, 'cached data']])
+      provider: () => new Map([[key, { data: 'cached data' }]])
     })
 
     const callback = jest.fn()
@@ -303,7 +305,7 @@ describe('useSWR - local mutation', () => {
     expect(increment).toHaveBeenLastCalledWith(undefined)
     expect(increment).toHaveLastReturnedWith(undefined)
 
-    cache.set(key, 42)
+    cache.set(key, { ...cache.get(key), data: 42 })
 
     await mutate(key, increment, false)
 
@@ -314,25 +316,26 @@ describe('useSWR - local mutation', () => {
 
   it('should return results of the mutation', async () => {
     const key = createKey()
-    // returns the data if promise resolved
+    // returns the data if the promise resolved
     expect(globalMutate(key, Promise.resolve('data'))).resolves.toBe('data')
 
-    // throw the error if promise rejected
+    // throw the error if the promise rejected
     expect(
       globalMutate(key, Promise.reject(new Error('error')))
     ).rejects.toBeInstanceOf(Error)
   })
 
   it('globalMutate should return undefined if the key is serialized to "" ', async () => {
-    // returns the data if promise resolved
+    // returns the data if the promise resolved
     expect(globalMutate(null, Promise.resolve('data'))).resolves.toBe(undefined)
 
-    // throw the error if promise rejected
+    // throw the error if the promise rejected
+    const e = new Error('error')
     expect(
       globalMutate(() => {
-        throw new Error('error')
+        throw e
       }, Promise.resolve('data'))
-    ).resolves.toBe(undefined)
+    ).rejects.toEqual(e)
   })
 
   it('should get bound mutate from useSWR', async () => {
@@ -349,12 +352,12 @@ describe('useSWR - local mutation', () => {
     // hydration
     screen.getByText('data:')
 
-    //mount
+    // mount
     await screen.findByText('data: fetched')
 
     // call bound mutate
     fireEvent.click(screen.getByText('data: fetched'))
-    // expect new updated value (after a tick)
+    // expect a new updated value (after a tick)
     await screen.findByText('data: mutated')
   })
 
@@ -439,7 +442,7 @@ describe('useSWR - local mutation', () => {
       ).resolves.toBe('off')
     })
 
-    // Wait for toggling "on" promise to resolve, but the "on" mutation is cancelled
+    // Wait for toggling "on" promise to resolve, but the "on" mutation is canceled
     await act(() => sleep(50))
     screen.getByText('off')
 
@@ -464,7 +467,7 @@ describe('useSWR - local mutation', () => {
     // hydration
     screen.getByText('data:')
 
-    //mount
+    // mount
     await screen.findByText('data: 0')
 
     act(() => {
@@ -536,14 +539,14 @@ describe('useSWR - local mutation', () => {
     })
 
     screen.getByText(message)
-    const [keyData, , keyInfo] = serialize(key)
+    const [keyInfo] = serialize(key)
     let cacheError = cache.get(keyInfo)?.error
     expect(cacheError.message).toMatchInlineSnapshot(`"${message}"`)
 
     // if mutate throws an error synchronously, the cache shouldn't be updated
-    expect(cache.get(keyData)).toBe(value)
+    expect(cache.get(keyInfo)?.data).toBe(value)
 
-    // if mutate succeed, error should be cleared
+    // if mutate succeed, the error should be cleared
     await act(() => mutate(key, value, false))
     cacheError = cache.get(keyInfo)?.error
     expect(cacheError).toMatchInlineSnapshot(`undefined`)
@@ -582,7 +585,7 @@ describe('useSWR - local mutation', () => {
   })
 
   // https://github.com/vercel/swr/pull/1003
-  it('should not dedupe synchronous mutations', async () => {
+  it.skip('should not dedupe synchronous mutations', async () => {
     const mutationRecivedValues = []
     const renderRecivedValues = []
 
@@ -612,7 +615,7 @@ describe('useSWR - local mutation', () => {
 
     renderWithConfig(<Component />)
 
-    await act(() => sleep(50))
+    await executeWithoutBatching(() => sleep(50))
     expect(mutationRecivedValues).toEqual([0, 1])
     expect(renderRecivedValues).toEqual([undefined, 0, 1, 2])
   })
@@ -807,7 +810,7 @@ describe('useSWR - local mutation', () => {
         createResponse('data', { delay: 30 })
       )
       const { cache } = useSWRConfig()
-      const [, , keyInfo] = serialize(key)
+      const [keyInfo] = serialize(key)
       const cacheIsValidating = cache.get(keyInfo)?.isValidating
       return (
         <>
@@ -922,7 +925,7 @@ describe('useSWR - local mutation', () => {
     }
 
     renderWithConfig(<Page />)
-    await act(() => sleep(200))
+    await executeWithoutBatching(() => sleep(200))
 
     // Only "async3" is left and others were deduped.
     expect(loggedData).toEqual([
@@ -1029,13 +1032,110 @@ describe('useSWR - local mutation', () => {
     renderWithConfig(<Page />)
     await screen.findByText('data: foo')
 
-    await act(() =>
+    await executeWithoutBatching(() =>
       mutate(createResponse('baz', { delay: 20 }), {
         optimisticData: 'bar'
       })
     )
     await sleep(30)
     expect(renderedData).toEqual([undefined, 'foo', 'bar', 'baz', 'foo'])
+  })
+
+  it('should support optimistic updates via function `optimisticData`', async () => {
+    const key = createKey()
+    const renderedData = []
+    let mutate
+
+    function Page() {
+      const { data, mutate: boundMutate } = useSWR(key, () =>
+        createResponse('foo', { delay: 20 })
+      )
+      mutate = boundMutate
+      renderedData.push(data)
+      return <div>data: {String(data)}</div>
+    }
+
+    renderWithConfig(<Page />)
+    await screen.findByText('data: foo')
+
+    await executeWithoutBatching(() =>
+      mutate(createResponse('baz', { delay: 20 }), {
+        optimisticData: data => 'function_' + data
+      })
+    )
+    await sleep(30)
+    expect(renderedData).toEqual([
+      undefined,
+      'foo',
+      'function_foo',
+      'baz',
+      'foo'
+    ])
+  })
+
+  it('should be able use mutate to manipulate data via function `optimisticData`', async () => {
+    const key = createKey()
+    const renderedData = []
+
+    function useOptimisticDataMutate(_key, data, fallback) {
+      const { mutate } = useSWRConfig()
+      return () => {
+        return mutate(_key, createResponse(data, { delay: 20 }), {
+          optimisticData() {
+            return fallback
+          }
+        })
+      }
+    }
+
+    function Page() {
+      const mutateWithOptData = useOptimisticDataMutate(key, 'final', 'loading')
+      const { data } = useSWR(key)
+      renderedData.push(data)
+      return (
+        <div>
+          <button onClick={() => mutateWithOptData()}>mutate</button>
+          <div>data: {String(data)}</div>
+        </div>
+      )
+    }
+
+    renderWithConfig(<Page />)
+    fireEvent.click(screen.getByText('mutate'))
+    await act(() => sleep(30))
+
+    expect(renderedData).toEqual([undefined, 'loading', 'final'])
+  })
+
+  it('should prevent race conditions with optimistic UI', async () => {
+    const key = createKey()
+    const renderedData = []
+    let mutate
+
+    function Page() {
+      const { data, mutate: boundMutate } = useSWR(key, () => Math.random(), {
+        refreshInterval: 10,
+        dedupingInterval: 0
+      })
+      mutate = boundMutate
+      renderedData.push(data)
+      return <div>data: {String(data)}</div>
+    }
+
+    renderWithConfig(<Page />)
+
+    await act(() => sleep(20))
+    await executeWithoutBatching(() =>
+      mutate(createResponse('end', { delay: 50 }), {
+        optimisticData: 'start'
+      })
+    )
+    await act(() => sleep(20))
+
+    // There can never be any changes during a mutation — it should be atomic.
+    expect(renderedData.indexOf('end') - renderedData.indexOf('start')).toEqual(
+      1
+    )
   })
 
   it('should rollback optimistic updates when mutation fails', async () => {
@@ -1062,7 +1162,7 @@ describe('useSWR - local mutation', () => {
     await screen.findByText('data: 0')
 
     try {
-      await act(() =>
+      await executeWithoutBatching(() =>
         mutate(createResponse(new Error('baz'), { delay: 20 }), {
           optimisticData: 'bar'
         })
@@ -1073,6 +1173,176 @@ describe('useSWR - local mutation', () => {
 
     await sleep(30)
     expect(renderedData).toEqual([undefined, 0, 'bar', 0, 1])
+  })
+
+  it('should not revert to optimistic data when rolling back', async () => {
+    const key = createKey()
+    const renderedData = []
+    let mutate
+    let previousValue
+    let previousValue2
+
+    function Page() {
+      const { data, mutate: boundMutate } = useSWR(key, () =>
+        createResponse(0, { delay: 20 })
+      )
+      mutate = boundMutate
+
+      if (
+        !renderedData.length ||
+        renderedData[renderedData.length - 1] !== data
+      ) {
+        renderedData.push(data)
+      }
+
+      return <div>data: {String(data)}</div>
+    }
+
+    renderWithConfig(<Page />)
+    await screen.findByText('data: 0')
+
+    await executeWithoutBatching(async () => {
+      const p1 = mutate(createResponse(new Error(), { delay: 20 }), {
+        optimisticData: 1
+      })
+      await sleep(10)
+      const p2 = mutate(
+        v => {
+          previousValue = v
+          return createResponse(new Error(), { delay: 20 })
+        },
+        {
+          optimisticData: v => {
+            previousValue2 = v
+            return 2
+          }
+        }
+      )
+      return Promise.all([p1, p2])
+    }).catch(_e => {})
+
+    await sleep(30)
+
+    // It should revert to `0` instead of `1` at the end.
+    expect(renderedData).toEqual([undefined, 0, 1, 2, 0])
+
+    // It should receive the original displayed data instead of the currently displayed data.
+    expect(previousValue).toBe(0)
+    expect(previousValue2).toBe(0)
+  })
+
+  it('should rollback to the original value after multiple mutations', async () => {
+    const key = createKey()
+    const renderedData = []
+    let mutate
+    let serverData = 'foo'
+
+    function Page() {
+      const { data, mutate: boundMutate } = useSWR(key, () =>
+        createResponse(serverData, { delay: 20 })
+      )
+      mutate = boundMutate
+      if (
+        !renderedData.length ||
+        renderedData[renderedData.length - 1] !== data
+      ) {
+        renderedData.push(data)
+      }
+      return <div>data: {String(data)}</div>
+    }
+
+    // data == "foo"
+    renderWithConfig(<Page />)
+    await screen.findByText('data: foo')
+
+    // data == "bar"
+    await executeWithoutBatching(async () => {
+      await mutate(
+        createResponse('bar', { delay: 20 }).then(r => (serverData = r)),
+        {
+          optimisticData: 'bar',
+          populateCache: false
+        }
+      )
+    })
+
+    try {
+      // data == "baz", then reverted back to "bar"
+      await executeWithoutBatching(() =>
+        mutate(createResponse(new Error(), { delay: 20 }), {
+          optimisticData: 'baz',
+          revalidate: false
+        })
+      )
+    } catch (_) {
+      // Ignore
+    }
+
+    await sleep(30)
+    expect(renderedData).toEqual([undefined, 'foo', 'bar', 'baz', 'bar'])
+  })
+
+  it('should rollback to the original value after multiple mutations (2)', async () => {
+    const key = createKey()
+    const renderedData = []
+    let mutate
+    let serverData = 'foo'
+
+    function Page() {
+      const { data, mutate: boundMutate } = useSWR(key, () =>
+        createResponse(serverData, { delay: 20 })
+      )
+      mutate = boundMutate
+      if (
+        !renderedData.length ||
+        renderedData[renderedData.length - 1] !== data
+      ) {
+        renderedData.push(data)
+      }
+      return <div>data: {String(data)}</div>
+    }
+
+    // data == "foo"
+    renderWithConfig(<Page />)
+    await screen.findByText('data: foo')
+
+    // Here m1 and m2 overlap and m1 will be discarded.
+    await executeWithoutBatching(async () => {
+      const m1 = mutate(
+        createResponse('bar', { delay: 30 }).then(r => (serverData = r)),
+        {
+          optimisticData: 'bar',
+          populateCache: false
+        }
+      )
+
+      await sleep(10)
+
+      const m2 = mutate(
+        createResponse('baz', { delay: 30 }).then(r => (serverData = r))
+      )
+
+      await m1
+      await m2
+    })
+
+    try {
+      // data == "qux", then reverted back to "baz"
+      await executeWithoutBatching(() =>
+        mutate(createResponse(new Error(), { delay: 20 }), {
+          optimisticData: 'qux',
+          revalidate: false
+        })
+      )
+    } catch (_) {
+      // Ignore
+    }
+
+    // data: "foo" -> "bar" -> "baz" -> "qux" -> "baz"
+    //                 ^ optimistic      ^ error
+
+    await sleep(30)
+    expect(renderedData).toEqual([undefined, 'foo', 'bar', 'baz', 'qux', 'baz'])
   })
 
   it('should not rollback optimistic updates if `rollbackOnError`', async () => {
@@ -1099,7 +1369,7 @@ describe('useSWR - local mutation', () => {
     await screen.findByText('data: 0')
 
     try {
-      await act(() =>
+      await executeWithoutBatching(() =>
         mutate(createResponse(new Error('baz'), { delay: 20 }), {
           optimisticData: 'bar',
           rollbackOnError: false
@@ -1111,5 +1381,311 @@ describe('useSWR - local mutation', () => {
 
     await sleep(30)
     expect(renderedData).toEqual([undefined, 0, 'bar', 1])
+  })
+
+  it('should support transforming the result with `populateCache` before writing back', async () => {
+    const key = createKey()
+    function Page() {
+      const { data, mutate } = useSWR(key, () => 'foo')
+      return (
+        <>
+          <div>data: {String(data)}</div>
+          <button
+            onClick={() =>
+              mutate('bar', {
+                revalidate: false,
+                populateCache: v => '!' + v
+              })
+            }
+          >
+            mutate
+          </button>
+        </>
+      )
+    }
+
+    renderWithConfig(<Page />)
+    await screen.findByText('data: foo')
+
+    fireEvent.click(screen.getByText('mutate'))
+    await sleep(30)
+    await screen.findByText('data: !bar')
+  })
+
+  it('should support transforming the result with `populateCache` for async data with optimistic data', async () => {
+    const key = createKey()
+    const renderedData = []
+
+    let mutatePage
+
+    function Page() {
+      const { data, mutate } = useSWR(key, () => 'foo')
+      mutatePage = () =>
+        mutate(new Promise(res => setTimeout(() => res('baz'), 20)), {
+          optimisticData: () => 'bar',
+          revalidate: false,
+          populateCache: v => '!' + v
+        })
+
+      renderedData.push(data)
+      return null
+    }
+
+    renderWithConfig(<Page />)
+
+    await act(() => sleep(10))
+    await executeWithoutBatching(() => mutatePage())
+    await sleep(30)
+
+    expect(renderedData).toEqual([undefined, 'foo', 'bar', '!baz'])
+  })
+
+  it('should pass the original data snapshot to `populateCache` as the second parameter', async () => {
+    const key = createKey()
+    const renderedData = []
+
+    let serverData = ['Apple', 'Banana']
+
+    let appendData
+
+    const sendRequest = <Data,>(newItem) => {
+      return new Promise<Data>(res =>
+        setTimeout(() => {
+          // The server capitalizes the new item.
+          const modifiedData =
+            newItem.charAt(0).toUpperCase() + newItem.slice(1)
+          serverData = [...serverData, modifiedData]
+          res(modifiedData)
+        }, 20)
+      )
+    }
+
+    function Page() {
+      const { data, mutate } = useSWR(key, () => serverData)
+
+      appendData = () => {
+        return mutate(sendRequest('cherry'), {
+          optimisticData: [...data, 'cherry (optimistic)'],
+          populateCache: (result, currentData) => [
+            ...currentData,
+            result + ' (res)'
+          ],
+          revalidate: true
+        })
+      }
+
+      renderedData.push(data)
+      return null
+    }
+
+    renderWithConfig(<Page />)
+    await executeWithoutBatching(async () => {
+      await sleep(10)
+      await appendData()
+      await sleep(30)
+    })
+
+    expect(renderedData).toEqual([
+      undefined, // fetching
+      ['Apple', 'Banana'], // initial data
+      ['Apple', 'Banana', 'cherry (optimistic)'], // optimistic data
+      ['Apple', 'Banana', 'Cherry (res)'], // appended server response
+      ['Apple', 'Banana', 'Cherry'] // revalidated data
+    ])
+  })
+
+  it('should support key filter as first argument', async () => {
+    const key = createKey()
+    const mutationAllResults = []
+    const mutationOneResults = []
+
+    function Page() {
+      const { data: data1 } = useSWR(key + 'first', v => v)
+      const { data: data2 } = useSWR(key + 'second', v => v)
+      const { mutate } = useSWRConfig()
+      return (
+        <div>
+          <span
+            data-testid="mutator-filter-all"
+            onClick={async () => {
+              const res = await mutate(
+                k => typeof k === 'string' && k.startsWith(key),
+                data => {
+                  return 'value-' + data.replace(key, '')
+                },
+                false
+              )
+              mutationAllResults.push(...res)
+            }}
+          />
+          <span
+            data-testid="mutator-filter-one"
+            onClick={async () => {
+              const res = await mutate(
+                k => typeof k === 'string' && k.includes('first'),
+                () => 'value-first-g0',
+                false
+              )
+              mutationOneResults.push(...res)
+            }}
+          />
+          <p>first:{data1}</p>
+          <p>second:{data2}</p>
+        </div>
+      )
+    }
+    renderWithConfig(<Page />)
+
+    screen.getByText('first:')
+    screen.getByText('second:')
+
+    await nextTick()
+
+    // filter and mutate `first` and `second`
+    fireEvent.click(screen.getByTestId('mutator-filter-all'))
+    await nextTick()
+
+    await screen.findByText('first:value-first')
+    await screen.findByText('second:value-second')
+
+    expect(mutationAllResults).toEqual(['value-first', 'value-second'])
+
+    // only filter and mutate `first`
+    fireEvent.click(screen.getByTestId('mutator-filter-one'))
+    await nextTick()
+
+    await screen.findByText('first:value-first-g0')
+    await screen.findByText('second:value-second')
+
+    expect(mutationOneResults).toEqual(['value-first-g0'])
+  })
+
+  it('should remove all key value pairs when clear cache through key filter', async () => {
+    const key = createKey()
+    const mutationOneResults = []
+
+    function Page() {
+      const { data: data1 } = useSWR(key + 'first')
+      const { data: data2 } = useSWR(key + 'second')
+      const { mutate } = useSWRConfig()
+      return (
+        <div>
+          <span
+            data-testid="mutator-filter-all"
+            onClick={async () => {
+              const promises = ['first', 'second'].map(async name => {
+                await mutate(key + name, `value-${name}`, false)
+              })
+              await Promise.all(promises)
+            }}
+          />
+          <span
+            data-testid="clear-all"
+            onClick={async () => {
+              const res = await mutate(() => true, undefined, false)
+              mutationOneResults.push(...res)
+            }}
+          />
+          <p>first:{data1}</p>
+          <p>second:{data2}</p>
+        </div>
+      )
+    }
+    renderWithConfig(<Page />)
+
+    // add and mutate `first` and `second`
+    fireEvent.click(screen.getByTestId('mutator-filter-all'))
+    await nextTick()
+
+    await screen.findByText('first:value-first')
+    await screen.findByText('second:value-second')
+
+    // reset all keys to undefined
+    fireEvent.click(screen.getByTestId('clear-all'))
+    await nextTick()
+
+    await screen.findByText('first:')
+    await screen.findByText('second:')
+
+    expect(mutationOneResults).toEqual([undefined])
+  })
+
+  it('should pass the original key to the key filter', async () => {
+    const key = createKey()
+    const keys = []
+
+    function Page() {
+      useSWR([key, 'first'])
+      useSWR([key, 'second'])
+      useSWR(key)
+      const { mutate } = useSWRConfig()
+      return (
+        <span
+          data-testid="mutator-filter-all"
+          onClick={() => {
+            mutate(
+              k => {
+                keys.push(k)
+                return false
+              },
+              undefined,
+              false
+            )
+          }}
+        />
+      )
+    }
+    renderWithConfig(<Page />)
+
+    // add and mutate `first` and `second`
+    fireEvent.click(screen.getByTestId('mutator-filter-all'))
+    await nextTick()
+
+    expect(keys).toEqual([[key, 'first'], [key, 'second'], key])
+  })
+
+  it('should skip speicla useSWRInfinite keys', async () => {
+    const key = createKey()
+    const keys = []
+
+    function Page() {
+      useSWR([key, 'first'])
+      useSWR([key, 'second'])
+      useSWR(key)
+      useSWRInfinite(
+        i => [key, 'inf', i],
+        k => k,
+        { initialSize: 2 }
+      )
+      const { mutate } = useSWRConfig()
+      return (
+        <span
+          data-testid="mutator-filter-all"
+          onClick={() => {
+            mutate(
+              k => {
+                keys.push(k)
+                return false
+              },
+              undefined,
+              false
+            )
+          }}
+        />
+      )
+    }
+    renderWithConfig(<Page />)
+    await nextTick()
+
+    // add and mutate `first` and `second`
+    fireEvent.click(screen.getByTestId('mutator-filter-all'))
+
+    expect(keys).toEqual([
+      [key, 'first'],
+      [key, 'second'],
+      key,
+      [key, 'inf', 0],
+      [key, 'inf', 1]
+    ])
   })
 })

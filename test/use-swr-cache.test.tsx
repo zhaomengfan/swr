@@ -32,12 +32,12 @@ describe('useSWR - cache provider', () => {
     renderWithConfig(<Page />, { provider: () => provider })
     await screen.findByText(fetcher(keys[0]))
 
-    expect(provider.get(keys[1])).toBe(undefined)
+    expect(provider.get(keys[1])?.data).toBe(undefined)
     fireEvent.click(screen.getByText(fetcher(keys[0])))
     await act(() => sleep(10))
 
-    expect(provider.get(keys[0])).toBe(fetcher(keys[0]))
-    expect(provider.get(keys[1])).toBe(fetcher(keys[1]))
+    expect(provider.get(keys[0])?.data).toBe(fetcher(keys[0]))
+    expect(provider.get(keys[1])?.data).toBe(fetcher(keys[1]))
   })
 
   it('should be able to read from the initial cache with updates', async () => {
@@ -52,7 +52,7 @@ describe('useSWR - cache provider', () => {
     }
 
     renderWithConfig(<Page />, {
-      provider: () => new Map([[key, 'cached value']])
+      provider: () => new Map([[key, { data: 'cached value' }]])
     })
     screen.getByText('cached value')
     await screen.findByText('updated value')
@@ -71,7 +71,7 @@ describe('useSWR - cache provider', () => {
     }
 
     renderWithConfig(<Page />, {
-      provider: () => new Map([[key, 'cached value']])
+      provider: () => new Map([[key, { data: 'cached value' }]])
     })
     screen.getByText('cached value')
     await act(() => mutate(key, 'mutated value', false))
@@ -91,14 +91,18 @@ describe('useSWR - cache provider', () => {
       return (
         <div>
           {data}:
-          <SWRConfig value={{ provider: () => new Map([[key, '2']]) }}>
+          <SWRConfig
+            value={{ provider: () => new Map([[key, { data: '2' }]]) }}
+          >
             <Foo />
           </SWRConfig>
         </div>
       )
     }
 
-    renderWithConfig(<Page />, { provider: () => new Map([[key, '1']]) })
+    renderWithConfig(<Page />, {
+      provider: () => new Map([[key, { data: '1' }]])
+    })
     screen.getByText('1:2')
   })
 
@@ -113,11 +117,15 @@ describe('useSWR - cache provider', () => {
     function Page() {
       return (
         <div>
-          <SWRConfig value={{ provider: () => new Map([[key, '1']]) }}>
+          <SWRConfig
+            value={{ provider: () => new Map([[key, { data: '1' }]]) }}
+          >
             <Foo />
           </SWRConfig>
           :
-          <SWRConfig value={{ provider: () => new Map([[key, '2']]) }}>
+          <SWRConfig
+            value={{ provider: () => new Map([[key, { data: '2' }]]) }}
+          >
             <Foo />
           </SWRConfig>
         </div>
@@ -142,7 +150,7 @@ describe('useSWR - cache provider', () => {
       return <>{String(data)}</>
     }
     const { unmount } = renderWithConfig(<Page />, {
-      provider: () => new Map([[key, 0]]),
+      provider: () => new Map([[key, { data: 0 }]]),
       initFocus() {
         focusFn()
         return unsubscribeFocusFn
@@ -190,19 +198,23 @@ describe('useSWR - cache provider', () => {
   it('should support fallback values with custom provider', async () => {
     const key = createKey()
     function Page() {
-      const { data } = useSWR(key, async () => {
+      const { data, isLoading } = useSWR(key, async () => {
         await sleep(10)
         return 'data'
       })
-      return <>{String(data)}</>
+      return (
+        <>
+          {String(data)},{String(isLoading)}
+        </>
+      )
     }
 
     renderWithConfig(<Page />, {
       provider: () => provider,
       fallback: { [key]: 'fallback' }
     })
-    screen.getByText('fallback') // no `undefined`, directly fallback
-    await screen.findByText('data')
+    screen.getByText('fallback,true') // no `undefined`, directly fallback
+    await screen.findByText('data,false')
   })
 
   it('should not return the fallback if cached', async () => {
@@ -216,10 +228,10 @@ describe('useSWR - cache provider', () => {
     }
 
     renderWithConfig(<Page />, {
-      provider: () => new Map([[key, 'cache']]),
+      provider: () => new Map([[key, { data: 'cache' }]]),
       fallback: { [key]: 'fallback' }
     })
-    screen.getByText('cache') // no `undefined`, directly from cache
+    screen.getByText('cache') // no `undefined`, directly from the cache
     await screen.findByText('data')
   })
 
@@ -239,18 +251,21 @@ describe('useSWR - cache provider', () => {
       provider: parentCache_ => {
         parentCache = parentCache_
         return {
+          keys: () => parentCache.keys(),
           set: (k, v) => parentCache_.set(k, v),
           get: k => {
             // We append `-extended` to the value returned by the parent cache.
             const v = parentCache_.get(k)
-            if (typeof v === 'undefined') return v
-            return v + '-extended'
+            if (v && typeof v.data !== 'undefined') {
+              return { ...v, data: v.data + '-extended' }
+            }
+            return v
           },
           delete: k => parentCache_.delete(k)
         }
       }
     })
-    expect(parentCache).toBe(SWRConfig.default.cache)
+    expect(parentCache).toBe(SWRConfig.defaultValue.cache)
 
     screen.getByText('undefined')
     await screen.findByText('data-extended')
@@ -337,7 +352,7 @@ describe('useSWR - global cache', () => {
     }
 
     renderWithGlobalCache(<Page />)
-    expect(localCache).toBe(SWRConfig.default.cache)
+    expect(localCache).toBe(SWRConfig.defaultValue.cache)
     expect(localMutate).toBe(globalMutate)
   })
 
@@ -357,12 +372,12 @@ describe('useSWR - global cache', () => {
     renderWithGlobalCache(<Page />)
     await screen.findByText(fetcher(keys[0]))
 
-    expect(cache.get(keys[1])).toBe(undefined)
+    expect(cache.get(keys[1])?.data).toBe(undefined)
     fireEvent.click(screen.getByText(fetcher(keys[0])))
     await act(() => sleep(10))
 
-    expect(cache.get(keys[0])).toBe(fetcher(keys[0]))
-    expect(cache.get(keys[1])).toBe(fetcher(keys[1]))
+    expect(cache.get(keys[0])?.data).toBe(fetcher(keys[0]))
+    expect(cache.get(keys[1])?.data).toBe(fetcher(keys[1]))
   })
 
   it('should correctly mutate the cached value', async () => {
@@ -419,7 +434,7 @@ describe('useSWR - global cache', () => {
   it('should reusing the same cache instance after unmounting SWRConfig', async () => {
     let focusEventRegistered = false
 
-    const cacheSingleton = new Map([['key', 'value']])
+    const cacheSingleton = new Map([['key', { data: 'value' }]])
     function Page() {
       return (
         <SWRConfig
@@ -437,7 +452,7 @@ describe('useSWR - global cache', () => {
     }
     function Comp() {
       const { cache } = useSWRConfig()
-      return <>{String(cache.get('key'))}</>
+      return <>{String(cache.get('key')?.data)}</>
     }
 
     function Wrapper() {
@@ -462,7 +477,7 @@ describe('useSWR - global cache', () => {
   it('should correctly return the cache instance under strict mode', async () => {
     function Page() {
       // Intentionally do this.
-      const [cache] = useState(new Map([['key', 'value']]))
+      const [cache] = useState(new Map([['key', { data: 'value' }]]))
       return (
         <SWRConfig value={{ provider: () => cache }}>
           <Comp />
@@ -471,7 +486,7 @@ describe('useSWR - global cache', () => {
     }
     function Comp() {
       const { cache } = useSWRConfig()
-      return <>{String(cache.get('key'))}</>
+      return <>{String(cache.get('key')?.data)}</>
     }
 
     renderWithGlobalCache(

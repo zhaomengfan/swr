@@ -4,7 +4,7 @@
 
 Deploy your own SWR project with Vercel.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/project?template=https://github.com/vercel/swr/tree/main/examples/focus-revalidate)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?s=https://github.com/vercel/swr/tree/main/examples/focus-revalidate)
 
 ## How to Use
 
@@ -25,12 +25,6 @@ npm install
 npm run dev
 ```
 
-Deploy it to the cloud with [now](https://vercel.com/home) ([download](https://vercel.com/download))
-
-```
-now
-```
-
 ## The Idea behind the Example
 
-Basic authentication example showing how the revalidate on focus feature works and to trigger a revalidation in a per hook call basis.
+Basic authentication example showing how the revalidate on focus feature works and to trigger a revalidation on a per-hook call basis.

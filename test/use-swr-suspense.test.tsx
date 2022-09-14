@@ -1,11 +1,6 @@
 import { act, fireEvent, screen } from '@testing-library/react'
-import React, {
-  ReactNode,
-  Suspense,
-  useEffect,
-  useReducer,
-  useState
-} from 'react'
+import type { ReactNode, PropsWithChildren } from 'react'
+import React, { Suspense, useEffect, useReducer, useState } from 'react'
 import useSWR, { mutate } from 'swr'
 import {
   createKey,
@@ -15,7 +10,9 @@ import {
   sleep
 } from './utils'
 
-class ErrorBoundary extends React.Component<{ fallback: ReactNode }> {
+class ErrorBoundary extends React.Component<
+  PropsWithChildren<{ fallback: ReactNode }>
+> {
   state = { hasError: false }
   static getDerivedStateFromError() {
     return {
@@ -111,9 +108,13 @@ describe('useSWR - suspense', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const key = createKey()
     function Section() {
-      const { data } = useSWR(key, () => createResponse(new Error('error')), {
-        suspense: true
-      })
+      const { data } = useSWR<any>(
+        key,
+        () => createResponse(new Error('error')),
+        {
+          suspense: true
+        }
+      )
       return <div>{data}</div>
     }
 
@@ -129,8 +130,8 @@ describe('useSWR - suspense', () => {
     // hydration
     screen.getByText('fallback')
     await screen.findByText('error boundary')
-    // 1 for js-dom 1 for react-error-boundray
-    expect(console.error).toHaveBeenCalledTimes(2)
+    // 1 for js-dom 1 for react-error-boundary
+    expect(console.error).toHaveBeenCalledTimes(3)
   })
 
   it('should render cached data with error', async () => {
@@ -160,7 +161,32 @@ describe('useSWR - suspense', () => {
     )
 
     screen.getByText('hello,') // directly from cache
-    await screen.findByText('hello, error') // get error with cache
+    await screen.findByText('hello, error') // get the error with cache
+  })
+
+  it('should not fetch when cached data is present and `revalidateIfStale` is false', async () => {
+    const key = createKey()
+    mutate(key, 'cached')
+
+    let fetchCount = 0
+
+    function Section() {
+      const { data } = useSWR(key, () => createResponse(++fetchCount), {
+        suspense: true,
+        revalidateIfStale: false
+      })
+      return <div>{data}</div>
+    }
+
+    renderWithGlobalCache(
+      <Suspense fallback={<div>fallback</div>}>
+        <Section />
+      </Suspense>
+    )
+
+    screen.getByText('cached')
+    await act(() => sleep(50)) // Wait to confirm fetch is not triggered
+    expect(fetchCount).toBe(0)
   })
 
   it('should pause when key changes', async () => {
@@ -193,7 +219,7 @@ describe('useSWR - suspense', () => {
     )
 
     await screen.findByText(updatedKey)
-    // fixes https://github.com/zeit/swr/issues/57
+    // fixes https://github.com/vercel/swr/issues/57
     // initialKey' -> undefined -> updatedKey
     expect(renderedResults).toEqual([initialKey, updatedKey])
   })
@@ -230,6 +256,61 @@ describe('useSWR - suspense', () => {
     await screen.findByText('123,2')
 
     expect(renderedResults).toEqual(['123,1', '123,2'])
+  })
+
+  it('should render correctly when key changes (from null to valid key)', async () => {
+    // https://github.com/vercel/swr/issues/1836
+    const renderedResults = []
+    const baseKey = createKey()
+    let setData: any = () => {}
+    const Result = ({ query }: { query: string }) => {
+      const { data } = useSWR(
+        query ? `${baseKey}-${query}` : null,
+        key => createResponse(key, { delay: 200 }),
+        {
+          suspense: true
+        }
+      )
+      if (`${data}` !== renderedResults[renderedResults.length - 1]) {
+        if (data === undefined) {
+          renderedResults.push(`${baseKey}-nodata`)
+        } else {
+          renderedResults.push(`${data}`)
+        }
+      }
+      return <div>{data ? data : `${baseKey}-nodata`}</div>
+    }
+    const App = () => {
+      const [query, setQuery] = useState('123')
+      if (setData !== setQuery) {
+        setData = setQuery
+      }
+      return (
+        <>
+          <br />
+          <br />
+          <Suspense fallback={null}>
+            <Result query={query}></Result>
+          </Suspense>
+        </>
+      )
+    }
+
+    renderWithConfig(<App />)
+
+    await screen.findByText(`${baseKey}-123`)
+
+    act(() => setData(''))
+    await screen.findByText(`${baseKey}-nodata`)
+
+    act(() => setData('456'))
+    await screen.findByText(`${baseKey}-456`)
+
+    expect(renderedResults).toEqual([
+      `${baseKey}-123`,
+      `${baseKey}-nodata`,
+      `${baseKey}-456`
+    ])
   })
 
   it('should render initial data if set', async () => {
