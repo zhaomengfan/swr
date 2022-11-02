@@ -1,6 +1,6 @@
 {
   "name": "swr",
-  "version": "2.0.0-beta.7",
+  "version": "2.0.0-rc.0",
   "description": "React Hooks library for remote data fetching",
   "keywords": [
     "swr",
@@ -63,6 +63,7 @@
   "homepage": "https://swr.vercel.app",
   "license": "MIT",
   "scripts": {
+    "prepare": "husky install",
     "csb:install": "pnpm i -g pnpm@7",
     "csb:build": "pnpm install && pnpm build",
     "clean": "pnpm -r run clean",
@@ -79,11 +80,6 @@
     "test": "jest",
     "run-all-checks": "pnpm types:check && pnpm lint && pnpm test && pnpm test-typing"
   },
-  "husky": {
-    "hooks": {
-      "pre-commit": "lint-staged && pnpm types:check"
-    }
-  },
   "lint-staged": {
     "*.{ts,tsx}": [
       "eslint --fix --cache",
@@ -91,8 +87,8 @@
     ]
   },
   "devDependencies": {
-    "@swc/core": "1.2.244",
-    "@swc/jest": "0.2.21",
+    "@swc/core": "^1.3.5",
+    "@swc/jest": "0.2.23",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.1.1",
     "@type-challenges/utils": "0.1.1",
@@ -102,7 +98,7 @@
     "@types/use-sync-external-store": "^0.0.3",
     "@typescript-eslint/eslint-plugin": "5.36.1",
     "@typescript-eslint/parser": "5.36.1",
-    "bunchee": "2.1.1",
+    "bunchee": "2.1.5",
     "eslint": "8.15.0",
     "eslint-config-prettier": "8.5.0",
     "eslint-plugin-jest-dom": "4.0.1",

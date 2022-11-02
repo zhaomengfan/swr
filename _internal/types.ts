@@ -267,6 +267,7 @@ export type MutatorOptions<Data = any> = {
     | ((result: any, currentData: Data | undefined) => Data)
   optimisticData?: Data | ((currentData?: Data) => Data)
   rollbackOnError?: boolean
+  throwOnError?: boolean
 }
 
 export type MutatorConfig = {
@@ -337,7 +338,13 @@ export type SWRConfiguration<
 > = Partial<PublicConfiguration<Data, Error, Fn>>
 
 export interface SWRResponse<Data = any, Error = any> {
+  /**
+   * The returned data of the fetcher function.
+   */
   data: Data | undefined
+  /**
+   * The error object thrown by the fetcher function.
+   */
   error: Error | undefined
   mutate: KeyedMutator<Data>
   isValidating: boolean

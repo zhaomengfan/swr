@@ -113,7 +113,7 @@ export const useSWRHandler = <Data = any, Error = any>(
       const t = _ as keyof StateDependencies
       if (!compare(current[t], prev[t])) {
         if (t === 'data' && isUndefined(prev[t])) {
-          if (!compare(current[t], fallback)) {
+          if (!compare(current[t], returnedData)) {
             equal = false
           }
         } else {
@@ -639,7 +639,9 @@ export const SWRConfig = OBJECT.defineProperty(ConfigProvider, 'defaultValue', {
 export const unstable_serialize = (key: Key) => serialize(key)[0]
 
 /**
- * @link https://swr.vercel.app/
+ * A hook to fetch data.
+ *
+ * @link https://swr.vercel.app
  * @example
  * ```jsx
  * import useSWR from 'swr'
