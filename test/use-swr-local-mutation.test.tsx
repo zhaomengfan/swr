@@ -1,8 +1,8 @@
 import { act, screen, fireEvent } from '@testing-library/react'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import useSWR, { mutate as globalMutate, useSWRConfig } from 'swr'
 import useSWRInfinite from 'swr/infinite'
-import { serialize } from '../_internal/utils/serialize'
+import { serialize } from 'swr/_internal'
 import {
   createResponse,
   sleep,
@@ -542,6 +542,30 @@ describe('useSWR - local mutation', () => {
     const [keyInfo] = serialize(key)
     const cacheError = cache.get(keyInfo)?.error
     expect(cacheError).toBeUndefined()
+  })
+
+  it('should update error in global cache when mutate succeeded', async () => {
+    const key = createKey()
+
+    let mutate
+    function Page() {
+      const {
+        data,
+        error,
+        mutate: mutate_
+      } = useSWR<string>(key, async () => {
+        throw new Error('error')
+      })
+      mutate = mutate_
+      return <div>{error ? error.message : `data: ${data}`}</div>
+    }
+
+    renderWithConfig(<Page />)
+
+    // Mount
+    await screen.findByText('error')
+    mutate(v => v, { revalidate: false })
+    await screen.findByText('data: undefined')
   })
 
   it('should keep the `mutate` function referential equal', async () => {
@@ -1099,6 +1123,90 @@ describe('useSWR - local mutation', () => {
     expect(renderedData).toEqual([undefined, 'loading', 'final'])
   })
 
+  it('should be able to use functional optimistic data config and use second param `displayedData` to keep UI consistent in slow networks', async () => {
+    const key1 = createKey()
+    const key2 = createKey()
+    let data1 = 0
+    let data2 = 0
+
+    function useOptimisticData1Mutate() {
+      const { mutate } = useSWRConfig()
+      return () => {
+        return mutate(key1, () => createResponse(data1++, { delay: 1000 }), {
+          optimisticData(currentData) {
+            return currentData + 1 // optimistic update current data
+          }
+        })
+      }
+    }
+
+    function useOptimisticData2Mutate() {
+      const { mutate } = useSWRConfig()
+      return () => {
+        return mutate(key2, () => createResponse(data2++, { delay: 1000 }), {
+          optimisticData(_, displayedData) {
+            return displayedData + 1 // optimistic update displayed data
+          }
+        })
+      }
+    }
+
+    function Page() {
+      const mutateWithOptimisticallyUpdatedCurrentData =
+        useOptimisticData1Mutate()
+      const mutateWithOptimisticallyUpdatedDisplayedData =
+        useOptimisticData2Mutate()
+      const { data: renderedData1 } = useSWR<number>(key1, () =>
+        createResponse(data1, { delay: 1000 })
+      )
+      const { data: renderedData2 } = useSWR<number>(key2, () =>
+        createResponse(data2, { delay: 1000 })
+      )
+
+      return (
+        <div>
+          <button onClick={mutateWithOptimisticallyUpdatedCurrentData}>
+            incrementCurrent
+          </button>
+          <button onClick={mutateWithOptimisticallyUpdatedDisplayedData}>
+            incrementDisplayed
+          </button>
+          <div>
+            data: <span data-testid="data1">{renderedData1}</span>
+          </div>
+          <div>
+            data: <span data-testid="data2">{renderedData2}</span>
+          </div>
+        </div>
+      )
+    }
+
+    renderWithConfig(<Page />)
+    await act(() => sleep(1000)) // Wait for initial data to load
+    fireEvent.click(screen.getByText('incrementCurrent'))
+    fireEvent.click(screen.getByText('incrementDisplayed'))
+    fireEvent.click(screen.getByText('incrementCurrent'))
+    fireEvent.click(screen.getByText('incrementDisplayed'))
+    const renderedData1 = parseInt(
+      (await screen.findByTestId('data1')).innerHTML,
+      10
+    )
+    const renderedData2 = Number((await screen.findByTestId('data2')).innerHTML)
+    await act(() => sleep(2000)) // Wait for revalidation roundtrip
+    const renderedRevalidatedData1 = Number(
+      (await screen.findByTestId('data1')).innerHTML
+    )
+    const renderedRevalidatedData2 = Number(
+      (await screen.findByTestId('data2')).innerHTML
+    )
+    expect(data1).toEqual(2)
+    expect(renderedData1).toEqual(1)
+    expect(renderedRevalidatedData1).toEqual(2)
+    expect(data2).toEqual(2)
+    expect(renderedData2).toEqual(2)
+    expect(renderedRevalidatedData2).toEqual(2)
+  })
+
   it('should prevent race conditions with optimistic UI', async () => {
     const key = createKey()
     const renderedData = []
@@ -1337,7 +1445,7 @@ describe('useSWR - local mutation', () => {
     expect(renderedData).toEqual([undefined, 'foo', 'bar', 'baz', 'qux', 'baz'])
   })
 
-  it('should not rollback optimistic updates if `rollbackOnError`', async () => {
+  it('should not rollback optimistic updates if `rollbackOnError` is disabled', async () => {
     const key = createKey()
     const renderedData = []
     let mutate
@@ -1362,17 +1470,36 @@ describe('useSWR - local mutation', () => {
 
     try {
       await executeWithoutBatching(() =>
-        mutate(createResponse(new Error('baz'), { delay: 20 }), {
-          optimisticData: 'bar',
+        mutate(createResponse(new Error('baz-1'), { delay: 20 }), {
+          optimisticData: 'bar-1',
           rollbackOnError: false
         })
       )
     } catch (e) {
-      expect(e.message).toEqual('baz')
+      expect(e.message).toEqual('baz-1')
     }
 
     await sleep(30)
-    expect(renderedData).toEqual([undefined, 0, 'bar', 1])
+    expect(renderedData).toEqual([undefined, 0, 'bar-1', 1])
+
+    let rollbackErrorMessage
+    try {
+      await executeWithoutBatching(() =>
+        mutate(createResponse(new Error('baz-2'), { delay: 20 }), {
+          optimisticData: 'bar-2',
+          rollbackOnError: error => {
+            rollbackErrorMessage = error.message
+            return false
+          }
+        })
+      )
+    } catch (e) {
+      expect(e.message).toEqual('baz-2')
+    }
+
+    await sleep(30)
+    expect(renderedData).toEqual([undefined, 0, 'bar-1', 1, 'bar-2', 2])
+    expect(rollbackErrorMessage).toEqual('baz-2')
   })
 
   it('should support transforming the result with `populateCache` before writing back', async () => {

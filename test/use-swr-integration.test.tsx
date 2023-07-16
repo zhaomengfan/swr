@@ -113,6 +113,29 @@ describe('useSWR', () => {
     expect(fetch).toHaveBeenCalled()
   })
 
+  it('initial loading state should be false when revalidation is disabled with fallbackData', async () => {
+    const fetch = jest.fn(() => 'SWR')
+
+    const key = createKey()
+    function Page() {
+      const { data, isLoading, isValidating } = useSWR(key, fetch, {
+        revalidateIfStale: false,
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
+        fallbackData: 'Fallback'
+      })
+      return (
+        <div>
+          {data}, {isLoading.toString()} , {isValidating.toString()}
+        </div>
+      )
+    }
+
+    renderWithConfig(<Page />)
+    screen.getByText('Fallback, false , false')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it('should dedupe requests by default', async () => {
     const fetcher = jest.fn(() => createResponse('SWR'))
 
@@ -503,26 +526,26 @@ describe('useSWR', () => {
     await screen.findByText('data:value')
 
     expect(logs).toMatchInlineSnapshot(`
-      Array [
-        Object {
+      [
+        {
           "data": undefined,
           "error": undefined,
           "isLoading": true,
           "isValidating": true,
         },
-        Object {
+        {
           "data": undefined,
           "error": [Error: error],
           "isLoading": false,
           "isValidating": false,
         },
-        Object {
+        {
           "data": undefined,
           "error": [Error: error],
           "isLoading": true,
           "isValidating": true,
         },
-        Object {
+        {
           "data": "value",
           "error": undefined,
           "isLoading": false,
@@ -559,13 +582,45 @@ describe('useSWR', () => {
     await screen.findByText('data:value')
 
     expect(logs).toMatchInlineSnapshot(`
-      Array [
-        Object {
+      [
+        {
           "data": undefined,
         },
-        Object {
+        {
           "data": "value",
         },
+      ]
+    `)
+  })
+
+  // Test for https://github.com/vercel/swr/issues/2446
+  it('should return latest data synchronously after accessing getter', async () => {
+    const fetcher = async () => {
+      await sleep(10)
+      return 'value'
+    }
+    const key = createKey()
+
+    const logs = []
+
+    function Page() {
+      const swr = useSWR(key, fetcher)
+      const [show, setShow] = useState(false)
+      useEffect(() => {
+        setTimeout(() => {
+          setShow(true)
+        }, 100)
+      }, [])
+      if (!show) return null
+      logs.push(swr.data)
+      return <p>data:{swr.data}</p>
+    }
+
+    renderWithConfig(<Page />)
+    await screen.findByText('data:value')
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "value",
       ]
     `)
   })

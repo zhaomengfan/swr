@@ -5,12 +5,11 @@
 // Do not lint the return value destruction for `renderToString`
 /* eslint-disable testing-library/render-result-naming-convention */
 
-import React from 'react'
 import { renderToString } from 'react-dom/server'
-import useSWR from '../core'
-import useSWRImmutable from '../immutable'
+import useSWR from 'swr'
+import useSWRImmutable from 'swr/immutable'
+import { IS_SERVER } from 'swr/_internal'
 import { createKey } from './utils'
-import { IS_SERVER } from '../_internal/utils/env'
 
 describe('useSWR', () => {
   it('env IS_SERVER is true in node env', () => {

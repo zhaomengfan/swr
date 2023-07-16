@@ -6,8 +6,8 @@ import {
   executeWithoutBatching,
   renderWithConfig
 } from './utils'
-
 import React from 'react'
+
 import useSWR from 'swr'
 
 describe('useSWR - concurrent rendering', () => {
@@ -121,7 +121,5 @@ describe('useSWR - concurrent rendering', () => {
       renderWithConfig(<Page />)
       await sleep(500)
     })
-
-    console.log(log)
   })
 })
