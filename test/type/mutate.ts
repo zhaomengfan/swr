@@ -85,7 +85,7 @@ export function useConfigMutate() {
   )
 
   expect<Promise<any>>(
-    mutate('string', data => {
+    mutate('string', (data?: string) => {
       expectType<string | undefined>(data)
       return '0'
     })
